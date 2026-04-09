@@ -4,7 +4,7 @@
 #   - site faz proxy /api -> api:8080.
 # O login-api NÃO contacta o Canary por HTTP/TCP: só devolve ao cliente OT o IP/porta
 # (OT_GAMESERVER_* em otserver-web/.env). Esse valor tem de ser alcançável pelo jogador
-# (IP público da EC2 ou domínio), não o hostname Docker "server".
+# (ex.: meuotserver.com.br ou IP elástico), não o hostname Docker "server".
 #
 # Pré-requisito: submódulos Git (canary + otserver-web) — senão o build da API falha.
 #   git clone --recurse-submodules https://github.com/rodviana/tibia.git

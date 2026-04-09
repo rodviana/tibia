@@ -4,7 +4,7 @@
 # Stack tudo-em-um: ../docker-compose.yml na pasta infra.
 #
 # AWS: no Security Group, abrir OT_SERVER_LOGIN_PORT e OT_SERVER_GAME_PORT (ex. 7171/7172).
-# OT_SERVER_IP no .env: IP público (ou domínio) que o cliente usa para o mundo.
+# OT_SERVER_IP no .env: meuotserver.com.br (ou IP público) que o cliente usa para o mundo.
 
 name: ot-canary
 
