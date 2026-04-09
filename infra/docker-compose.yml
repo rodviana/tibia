@@ -6,10 +6,12 @@
 # (OT_GAMESERVER_* em otserver-web/.env). Esse valor tem de ser alcançável pelo jogador
 # (ex. domínio com A record para a EC2 ou IP elástico), não o hostname Docker "server".
 #
-# Pré-requisito: ficheiros .env nas pastas abaixo (copiar de cada .env.example).
-#   infra/mysql/.env
-#   infra/canary/.env
-#   infra/otserver-web/.env
+# Pré-requisito: submódulos Git (canary + otserver-web) — senão o build da API falha.
+#   git clone --recurse-submodules https://github.com/rodviana/tibia.git
+#   # ou, já clonado: git submodule update --init --recursive
+#
+# .env: infra/mysql/.env, infra/canary/.env, infra/otserver-web/.env
+# Arranque: ./infra/up.sh   (cria .env em falta e sincroniza submódulos)
 #
 # Na raiz do repositório:
 #   docker compose -f infra/docker-compose.yml up -d --build
