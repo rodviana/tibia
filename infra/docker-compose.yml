@@ -38,12 +38,14 @@ services:
       - "${MYSQL_PUBLISH_ADDRESS:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
     networks:
       - internal
+    # Primeira subida: import do schema.sql pode levar vários minutos na EC2 — margem larga.
+    # Se ficar unhealthy: docker logs <container-database>; volume a meio: docker compose down -v e volta a subir.
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 40s
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
 
   server:
     image: ${CANARY_IMAGE:-ghcr.io/opentibiabr/canary:latest}
