@@ -1,0 +1,61 @@
+# Site (Vue/Vite + Nginx) + ot-login-api (Spring Boot).
+#
+# Requisito: rede Docker `ot-mysql-net` (subir antes: infra/mysql com docker compose up).
+# Alternativa mesma EC2: ../docker-compose.yml (rede interna única, sem rede externa).
+#
+# AWS: abrir no Security Group a porta SITE_HTTP_PORT (ex. 80 ou 443 se terminares TLS noutro proxy).
+# A API pode ficar só na rede interna; o browser fala com /api via Nginx.
+
+name: ot-web
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/otserver-web/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MYSQL_URL: ${MYSQL_URL}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      OT_JWT_SECRET: ${OT_JWT_SECRET}
+      OT_GAMESERVER_IP: ${OT_GAMESERVER_IP}
+      OT_GAMESERVER_PORT: ${OT_GAMESERVER_PORT:-7172}
+      OT_GAMESERVER_NAME: ${OT_GAMESERVER_NAME:-OTServBR-Global}
+      OT_SECURITY_TRUSTFORWARDHEADERS: ${OT_SECURITY_TRUSTFORWARDHEADERS:-false}
+    ports:
+      - "${API_PUBLISH_ADDRESS:-127.0.0.1}:${API_PUBLISH_PORT:-8080}:8080"
+    networks:
+      - web
+      - mysql
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/check >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  site:
+    build:
+      context: ../..
+      dockerfile: infra/otserver-web/Dockerfile.site
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
+    ports:
+      - "${SITE_PUBLISH_ADDRESS:-0.0.0.0}:${SITE_HTTP_PORT:-80}:80"
+    networks:
+      - web
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  web:
+    name: ot-web-net
+    driver: bridge
+  mysql:
+    name: ot-mysql-net
+    external: true

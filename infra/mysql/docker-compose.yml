@@ -1,0 +1,42 @@
+# MySQL/MariaDB para Canary + ot-login-api na mesma EC2 ou VPC.
+#
+# AWS:
+# - Não abras 3306 para 0.0.0.0/0 no Security Group. Apenas SG da app / mesma VPC.
+# - Por defeito o bind é 127.0.0.1 (Canary/ot-api no host ou túnel SSH).
+# - Com tudo em Docker, ligue os outros compose a rede externa ot-mysql-net (sem expor 3306).
+#
+# Uso: cp .env.example .env && docker compose up -d
+#
+# Stack completa (MySQL + Canary + site + API) na mesma máquina: ver ../docker-compose.yml
+
+name: ot-mysql
+
+services:
+  database:
+    image: mariadb:lts
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Primeira subida: entrypoint cria DB/user (vars MYSQL_*) e corre scripts em ordem.
+      - ../../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      # MYSQL_PUBLISH_ADDRESS=0.0.0.0 só se precisares de outra máquina na VPC (ajusta o SG).
+      - "${MYSQL_PUBLISH_ADDRESS:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
+    networks:
+      - ot-data
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+volumes:
+  mysql_data:
+
+networks:
+  ot-data:
+    name: ot-mysql-net
+    driver: bridge

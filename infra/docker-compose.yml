@@ -1,0 +1,106 @@
+# Stack completa na mesma EC2 (um único Docker Compose).
+# Comunicação na rede Docker:
+#   - api (login-api) e server (Canary) ligam ao MySQL em database:3306.
+#   - site faz proxy /api -> api:8080.
+# O login-api NÃO contacta o Canary por HTTP/TCP: só devolve ao cliente OT o IP/porta
+# (OT_GAMESERVER_* em otserver-web/.env). Esse valor tem de ser alcançável pelo jogador
+# (ex. domínio com A record para a EC2 ou IP elástico), não o hostname Docker "server".
+#
+# Pré-requisito: ficheiros .env nas pastas abaixo (copiar de cada .env.example).
+#   infra/mysql/.env
+#   infra/canary/.env
+#   infra/otserver-web/.env
+#
+# Na raiz do repositório:
+#   docker compose -f infra/docker-compose.yml up -d --build
+#
+# Se mudares portas só nos .env das subpastas e o Compose não as aplicar no mapeamento,
+# passa os mesmos ficheiros à interpolação:
+#   docker compose --env-file infra/mysql/.env --env-file infra/canary/.env --env-file infra/otserver-web/.env -f infra/docker-compose.yml up -d
+#
+# Em alternativa, podes continuar a usar os três compose separados (mysql primeiro;
+# depois canary e otserver-web com rede externa ot-mysql-net).
+
+name: ot-stack
+
+services:
+  database:
+    image: mariadb:lts
+    restart: unless-stopped
+    env_file:
+      - mysql/.env
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "${MYSQL_PUBLISH_ADDRESS:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  server:
+    image: ${CANARY_IMAGE:-ghcr.io/opentibiabr/canary:latest}
+    restart: unless-stopped
+    env_file:
+      - canary/.env
+    ulimits:
+      core: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "${GAME_PUBLISH_ADDRESS:-0.0.0.0}:${OT_SERVER_LOGIN_PORT:-7171}:${OT_SERVER_LOGIN_PORT:-7171}"
+      - "${GAME_PUBLISH_ADDRESS:-0.0.0.0}:${OT_SERVER_GAME_PORT:-7172}:${OT_SERVER_GAME_PORT:-7172}"
+    networks:
+      - internal
+    depends_on:
+      database:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/otserver-web/Dockerfile.api
+    restart: unless-stopped
+    env_file:
+      - otserver-web/.env
+    ports:
+      - "${API_PUBLISH_ADDRESS:-127.0.0.1}:${API_PUBLISH_PORT:-8080}:8080"
+    networks:
+      - internal
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/check >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  site:
+    build:
+      context: ..
+      dockerfile: infra/otserver-web/Dockerfile.site
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
+    ports:
+      - "${SITE_PUBLISH_ADDRESS:-0.0.0.0}:${SITE_HTTP_PORT:-80}:80"
+    networks:
+      - internal
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  mysql_data:
+
+networks:
+  internal:
+    driver: bridge
