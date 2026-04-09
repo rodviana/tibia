@@ -4,7 +4,7 @@
 #   - site faz proxy /api -> api:8080.
 # O login-api NÃO contacta o Canary por HTTP/TCP: só devolve ao cliente OT o IP/porta
 # (OT_GAMESERVER_* em otserver-web/.env). Esse valor tem de ser alcançável pelo jogador
-# (ex. domínio com A record para a EC2 ou IP elástico), não o hostname Docker "server".
+# (IP público da EC2 ou domínio), não o hostname Docker "server".
 #
 # Pré-requisito: submódulos Git (canary + otserver-web) — senão o build da API falha.
 #   git clone --recurse-submodules https://github.com/rodviana/tibia.git
@@ -23,7 +23,7 @@
 # Em alternativa, podes continuar a usar os três compose separados (mysql primeiro;
 # depois canary e otserver-web com rede externa ot-mysql-net).
 #
-# Domínio (ex. meuotserver.com.br): SG da EC2 com TCP 80 (e 443 se terminares TLS na origem).
+# Site público: SG da EC2 com TCP 80 (e 443 se terminares TLS na origem).
 # Cloudflare proxy: OT_SECURITY_TRUSTFORWARDHEADERS=true em infra/otserver-web/.env; SSL na Cloudflare
 # "Flexible" ou "Full" conforme tiveres certificado na origem. Cliente Tibia (7171/7172) não passa pelo proxy HTTP.
 
