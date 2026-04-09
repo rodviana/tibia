@@ -22,6 +22,10 @@
 #
 # Em alternativa, podes continuar a usar os três compose separados (mysql primeiro;
 # depois canary e otserver-web com rede externa ot-mysql-net).
+#
+# Domínio (ex. meuotserver.com.br): SG da EC2 com TCP 80 (e 443 se terminares TLS na origem).
+# Cloudflare proxy: OT_SECURITY_TRUSTFORWARDHEADERS=true em infra/otserver-web/.env; SSL na Cloudflare
+# "Flexible" ou "Full" conforme tiveres certificado na origem. Cliente Tibia (7171/7172) não passa pelo proxy HTTP.
 
 name: ot-stack
 
