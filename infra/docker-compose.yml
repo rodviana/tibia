@@ -38,6 +38,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      # Tabelas Znote (signup/login-api, site): só corre em volume vazio na 1.ª subida.
+      - ./mysql/init/02-znote.sql:/docker-entrypoint-initdb.d/02-znote.sql:ro
     ports:
       - "${MYSQL_PUBLISH_ADDRESS:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
     networks:

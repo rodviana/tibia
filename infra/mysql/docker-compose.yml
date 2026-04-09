@@ -21,6 +21,7 @@ services:
       - mysql_data:/var/lib/mysql
       # Primeira subida: entrypoint cria DB/user (vars MYSQL_*) e corre scripts em ordem.
       - ../../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./init/02-znote.sql:/docker-entrypoint-initdb.d/02-znote.sql:ro
     ports:
       # MYSQL_PUBLISH_ADDRESS=0.0.0.0 só se precisares de outra máquina na VPC (ajusta o SG).
       - "${MYSQL_PUBLISH_ADDRESS:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
