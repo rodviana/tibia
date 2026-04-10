@@ -102,6 +102,7 @@ while [[ $# -gt 0 ]]; do
   ./infra/up.sh                 # submódulos + .env + up -d --build
   ./infra/up.sh --public-ip     # idem + OT_SERVER_IP / OT_GAMESERVER_IP = IPv4 EC2
   ./infra/up.sh ps
+Atualizar tudo na EC2 (pull + down + up): ./infra/stack-refresh.sh
 Clone: git clone --recurse-submodules https://github.com/rodviana/tibia.git
 EOF
       exit 0
