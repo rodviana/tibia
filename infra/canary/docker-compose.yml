@@ -14,6 +14,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - ../../canary/data:/canary/data
+      - ../../canary/data-canary:/canary/data-canary
+      - ../../canary/data-otservbr-global:/canary/data-otservbr-global
+      - ../../canary/key.pem:/canary/key.pem:ro
+      - ../../canary/schema.sql:/canary/schema.sql:ro
     ulimits:
       core: -1
       nofile:
