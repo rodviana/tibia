@@ -59,6 +59,7 @@ services:
     env_file:
       - canary/.env
     volumes:
+      # items.xml e appearances.dat vêm do Git ignore no Canary; ./infra/up.sh copia-os da imagem se faltarem.
       - ../canary/data:/canary/data
       - ../canary/data-canary:/canary/data-canary
       - ../canary/data-otservbr-global:/canary/data-otservbr-global

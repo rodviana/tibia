@@ -38,6 +38,42 @@ ensure_env() {
   fi
 }
 
+# O mount ../canary/data:/canary/data substitui o /canary/data da imagem. O repositório Canary
+# ignora data/items/items.xml no .gitignore, pelo que clones Git ficam sem esse ficheiro.
+ensure_canary_core_items_from_image() {
+  local items_xml="$ROOT/canary/data/items/items.xml"
+  [[ -f "$items_xml" ]] && return 0
+
+  local docker_cli
+  if docker info &>/dev/null; then
+    docker_cli=docker
+  elif sudo docker info &>/dev/null; then
+    docker_cli="sudo docker"
+  else
+    echo "[up] Aviso: Docker indisponível; não foi possível copiar items da imagem Canary." >&2
+    return 0
+  fi
+
+  local image
+  image="$(grep -E '^[[:space:]]*CANARY_IMAGE=' "$INFRA_DIR/canary/.env" 2>/dev/null | tail -1 | sed "s/^[^=]*=//;s/^[[:space:]]*//;s/[[:space:]]*$//;s/^[\"']//;s/[\"']$//")"
+  [[ -z "$image" ]] && image="ghcr.io/opentibiabr/canary:latest"
+
+  echo "[up] Falta canary/data/items/items.xml; a copiar data/items/ da imagem ${image}..."
+  mkdir -p "$ROOT/canary/data/items"
+  local cid
+  cid="$($docker_cli create "$image" 2>/dev/null)" || {
+    echo "[up] ERRO: docker create falhou (ex.: imagem em falta — faz pull do serviço server)." >&2
+    exit 1
+  }
+  if ! $docker_cli cp "$cid:/canary/data/items/." "$ROOT/canary/data/items/"; then
+    $docker_cli rm "$cid" &>/dev/null || true
+    echo "[up] ERRO: docker cp de /canary/data/items falhou." >&2
+    exit 1
+  fi
+  $docker_cli rm "$cid" &>/dev/null || true
+  echo "[up] canary/data/items/ preenchido a partir da imagem."
+}
+
 bootstrap_public_ip() {
   local token pub
   token="$(curl -fsS -m 2 -X PUT "http://169.254.169.254/latest/api/token" \
@@ -82,6 +118,7 @@ sync_submodules
 ensure_env mysql
 ensure_env canary
 ensure_env otserver-web
+ensure_canary_core_items_from_image
 
 if [[ "$BOOTSTRAP_IP" -eq 1 ]]; then
   bootstrap_public_ip
