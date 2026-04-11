@@ -10,6 +10,11 @@
 # Se já clonaste sem submódulos:
 #   git pull && git submodule update --init --recursive
 #
+# items.xml: em alguns clones fica fora do Git (.gitignore em canary/). O compose monta
+# ../canary/data por cima da imagem; sem items.xml o Canary morre ao arrancar. Se o ficheiro
+# não existir, este script descarrega-o do repositório público (URL por defeito = main).
+#   CANARY_ITEMS_XML_URL=https://raw.githubusercontent.com/opentibiabr/canary/main/data/items/items.xml
+#
 set -euo pipefail
 
 INFRA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -129,6 +134,28 @@ PY
   echo "[up] canary/config.lua alinhado com $env_file (mysql, ip, portas, dataPack)."
 }
 
+# O bind mount ../canary/data:/canary/data substitui o data/ da imagem Docker. Sem items.xml
+# (muitas vezes omitido do clone por .gitignore) o servidor falha com "Cannot load: items.xml".
+ensure_canary_items_xml() {
+  local target="$ROOT/canary/data/items/items.xml"
+  if [[ -f "$target" ]]; then
+    return 0
+  fi
+  mkdir -p "$ROOT/canary/data/items"
+  local url="${CANARY_ITEMS_XML_URL:-https://raw.githubusercontent.com/opentibiabr/canary/main/data/items/items.xml}"
+  if ! command -v curl &>/dev/null; then
+    echo "[up] ERRO: falta $target e o curl não está instalado. Copia items.xml para esse caminho ou instala curl." >&2
+    exit 1
+  fi
+  echo "[up] Falta canary/data/items/items.xml (normal em clone sem ficheiros ignorados pelo Git). A descarregar..."
+  if ! curl -fL --connect-timeout 30 --retry 3 --retry-delay 2 -o "$target.part" "$url"; then
+    rm -f "$target.part"
+    exit 1
+  fi
+  mv "$target.part" "$target"
+  echo "[up] Instalado: $target"
+}
+
 # Login na 7171 pode funcionar com SG só nessa porta; ao escolher personagem o cliente liga à porta de jogo (API/Canary).
 validate_client_game_env() {
   local canary_env="$1"
@@ -227,6 +254,7 @@ if [[ -n "${OT_BOOTSTRAP_PUBLIC_IP:-}" && "$OT_BOOTSTRAP_PUBLIC_IP" != "0" ]]; t
 fi
 
 sync_submodules
+ensure_canary_items_xml
 ensure_env mysql
 ensure_env canary
 ensure_env otserver-web
