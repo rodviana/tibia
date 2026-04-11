@@ -1,11 +1,12 @@
-# Canary a partir do submódulo ../canary: build da imagem + config.lua do host.
+# Canary: build a partir do código em ../canary (submódulo Git opentibiabr/canary no repo pai).
 #
 # Uso (raiz do repo):
 #   ./infra/up.sh --canary-local
 #   ./infra/up.sh --env local --canary-local
 #
-# Token GitHub (vcpkg): ficheiro em infra/canary/secrets/github_token.txt ou GITHUB_TOKEN_FILE.
-# Apple Silicon: definir CANARY_DOCKERFILE=Dockerfile.arm ou build com --platform linux/amd64.
+# Token GitHub (cache NuGet vcpkg): opcional — infra/canary/secrets/github_token.txt ou GITHUB_TOKEN_FILE.
+# Sem token, o build demora mais (compilação a partir do código-fonte).
+# Apple Silicon: CANARY_DOCKERFILE=Dockerfile.arm ou build com --platform linux/amd64.
 
 services:
   server:
@@ -19,8 +20,6 @@ services:
         VCPKG_FEED_URL: ${VCPKG_FEED_URL:-https://nuget.pkg.github.com/opentibiabr/index.json}
         VCPKG_FEED_USERNAME: ${VCPKG_FEED_USERNAME:-opentibiabr}
         VCPKG_BINARY_SOURCES: ${VCPKG_BINARY_SOURCES:-clear;nuget,https://nuget.pkg.github.com/opentibiabr/index.json,read;nugettimeout,1200}
-    volumes:
-      - ../canary/config.lua:/canary/config.lua:ro
 
 secrets:
   github_token:

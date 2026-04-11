@@ -1,8 +1,8 @@
-# Build local da imagem Canary (stack completa na raiz do repo).
+# Build local da imagem Canary (contexto = submódulo ../../canary).
 # Preferível: ./infra/up.sh --canary-local (usa infra/docker-compose.canary-local.yml + monta canary/config.lua).
 #
-# Desde infra/canary/ (rede mysql externa): echo TOKEN > secrets/github_token.txt
-#   docker compose -f docker-compose.yml -f docker-compose.build.yml build
+# Token NuGet opcional: echo TOKEN > secrets/github_token.txt — sem token, vcpkg compila a partir do código (mais lento).
+# Desde infra/canary/: touch secrets/github_token.txt && docker compose -f docker-compose.yml -f docker-compose.build.yml build
 #
 # Ajuste VCPKG_FEED_* se o fork usar outro owner no GitHub Packages.
 

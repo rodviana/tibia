@@ -67,6 +67,8 @@ Usa os arquivos:
 
 Esse e o fluxo normal para EC2/producao.
 
+A taxa de XP (`rateExp`) e o resto da config do servidor ficam em **`canary/config.lua`** no servidor (o Compose monta esse ficheiro no contentor). O `./infra/up.sh` cria-o a partir de `canary/config.lua.dist` se ainda nao existir e alinha mysql/ip/portas com o `.env` do Canary. Se usares `docker compose` direto, garante que `canary/config.lua` existe antes.
+
 #### Ambiente local
 
 Usa os arquivos:
@@ -96,7 +98,7 @@ sudo ./infra/up.sh --env local
 
 #### Canary a partir do submodulo (build local + `canary/config.lua` do host)
 
-Precisa de token GitHub para o vcpkg (uma vez): `echo SEU_TOKEN > infra/canary/secrets/github_token.txt`
+Token GitHub opcional (acelera o vcpkg via NuGet): `echo SEU_TOKEN > infra/canary/secrets/github_token.txt`. Sem token, o primeiro build demora mais (compilacao a partir do codigo).
 
 ```bash
 cd ~/tibia
@@ -105,7 +107,7 @@ sudo ./infra/up.sh --canary-local
 sudo ./infra/up.sh --env local --canary-local
 ```
 
-O script cria `canary/config.lua` a partir de `config.lua.dist` se faltar e alinha mysql/ip/portas/datapack com o `.env` do Canary escolhido (`rateExp` e o resto ficam no teu `config.lua`).
+O `./infra/up.sh` sem esta flag ja usa `canary/config.lua` no host para rates; `--canary-local` adiciona **build** da imagem a partir do submodulo `canary/`.
 
 #### Ambiente padrao com Docker Compose
 

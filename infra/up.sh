@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Arranque da stack: submódulos Git (canary, otserver-web), .env e docker compose.
 #
+# Alvo comum: Amazon Linux 2023 na EC2 — Docker + plugin compose + python3 (dnf install -y docker python3;
+#   sudo systemctl enable --now docker; sudo usermod -aG docker ec2-user).
+#
 # Clone na EC2 (recomendado):
 #   git clone --recurse-submodules https://github.com/rodviana/tibia.git
 #
@@ -56,8 +59,8 @@ read_ot_env_line() {
   grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^"//;s/"$//'
 }
 
-# Garante canary/config.lua e alinha MySQL/IP/portas/datapack com o .env do Canary escolhido (modo --canary-local).
-ensure_canary_local_config() {
+# Garante canary/config.lua no host e alinha MySQL/IP/portas/datapack com o .env do Canary (Compose monta este ficheiro no contentor).
+ensure_canary_host_config() {
   local env_file="$1"
   local cfg="$ROOT/canary/config.lua"
   if [[ ! -f "$cfg" ]]; then
@@ -82,18 +85,47 @@ ensure_canary_local_config() {
   export OT_CFG_SYNC_HOST="$h" OT_CFG_SYNC_USER="$u" OT_CFG_SYNC_PASS="$p" OT_CFG_SYNC_DB="$db" \
     OT_CFG_SYNC_PORT="$port" OT_CFG_SYNC_IP="$ip" OT_CFG_SYNC_LOGIN="$login" OT_CFG_SYNC_GAME="$game" \
     OT_CFG_SYNC_STATUS="$status" OT_CFG_SYNC_DPACK="$dpack"
-  perl -i -pe '
-    s/^mysqlHost = .*/mysqlHost = "$ENV{OT_CFG_SYNC_HOST}"/ if length $ENV{OT_CFG_SYNC_HOST};
-    s/^mysqlUser = .*/mysqlUser = "$ENV{OT_CFG_SYNC_USER}"/ if length $ENV{OT_CFG_SYNC_USER};
-    s/^mysqlPass = .*/mysqlPass = "$ENV{OT_CFG_SYNC_PASS}"/ if length $ENV{OT_CFG_SYNC_PASS};
-    s/^mysqlDatabase = .*/mysqlDatabase = "$ENV{OT_CFG_SYNC_DB}"/ if length $ENV{OT_CFG_SYNC_DB};
-    s/^mysqlPort = .*/mysqlPort = $ENV{OT_CFG_SYNC_PORT}/ if length $ENV{OT_CFG_SYNC_PORT};
-    s/^ip = .*/ip = "$ENV{OT_CFG_SYNC_IP}"/ if length $ENV{OT_CFG_SYNC_IP};
-    s/^loginProtocolPort = .*/loginProtocolPort = $ENV{OT_CFG_SYNC_LOGIN}/ if length $ENV{OT_CFG_SYNC_LOGIN};
-    s/^gameProtocolPort = .*/gameProtocolPort = $ENV{OT_CFG_SYNC_GAME}/ if length $ENV{OT_CFG_SYNC_GAME};
-    s/^statusProtocolPort = .*/statusProtocolPort = $ENV{OT_CFG_SYNC_STATUS}/ if length $ENV{OT_CFG_SYNC_STATUS};
-    s/^dataPackDirectory = .*/dataPackDirectory = "$ENV{OT_CFG_SYNC_DPACK}"/ if length $ENV{OT_CFG_SYNC_DPACK};
-  ' "$cfg"
+  if ! command -v python3 &>/dev/null; then
+    echo "[up] ERRO: python3 em falta (Amazon Linux: sudo dnf install -y python3)." >&2
+    exit 1
+  fi
+  OT_CFG_SYNC_CFG_PATH="$cfg" python3 <<'PY'
+import os, re
+path = os.environ["OT_CFG_SYNC_CFG_PATH"]
+with open(path, "r", encoding="utf-8", errors="replace") as f:
+    s = f.read()
+
+def sub(pat: str, repl: str) -> None:
+    global s
+    s = re.sub(pat, repl, s, flags=re.MULTILINE)
+
+h, u, pw, db = map(os.environ.get, ("OT_CFG_SYNC_HOST", "OT_CFG_SYNC_USER", "OT_CFG_SYNC_PASS", "OT_CFG_SYNC_DB"))
+port, ip = os.environ.get("OT_CFG_SYNC_PORT"), os.environ.get("OT_CFG_SYNC_IP")
+login, game, status = os.environ.get("OT_CFG_SYNC_LOGIN"), os.environ.get("OT_CFG_SYNC_GAME"), os.environ.get("OT_CFG_SYNC_STATUS")
+dpack = os.environ.get("OT_CFG_SYNC_DPACK")
+if h:
+    sub(r"^mysqlHost = .*", f'mysqlHost = "{h}"')
+if u:
+    sub(r"^mysqlUser = .*", f'mysqlUser = "{u}"')
+if pw:
+    sub(r"^mysqlPass = .*", f'mysqlPass = "{pw}"')
+if db:
+    sub(r"^mysqlDatabase = .*", f'mysqlDatabase = "{db}"')
+if port:
+    sub(r"^mysqlPort = .*", f"mysqlPort = {port}")
+if ip:
+    sub(r"^ip = .*", f'ip = "{ip}"')
+if login:
+    sub(r"^loginProtocolPort = .*", f"loginProtocolPort = {login}")
+if game:
+    sub(r"^gameProtocolPort = .*", f"gameProtocolPort = {game}")
+if status:
+    sub(r"^statusProtocolPort = .*", f"statusProtocolPort = {status}")
+if dpack:
+    sub(r"^dataPackDirectory = .*", f'dataPackDirectory = "{dpack}"')
+with open(path, "w", encoding="utf-8") as f:
+    f.write(s)
+PY
   echo "[up] canary/config.lua alinhado com $env_file (mysql, ip, portas, dataPack)."
 }
 
@@ -109,8 +141,20 @@ bootstrap_public_ip() {
       "http://169.254.169.254/latest/meta-data/public-ipv4" 2>/dev/null || true)"
   fi
   if [[ -n "$pub" ]]; then
-    perl -i -pe "s/^OT_SERVER_IP=.*/OT_SERVER_IP=$pub/" "$canary_env_file"
-    perl -i -pe "s/^OT_GAMESERVER_IP=.*/OT_GAMESERVER_IP=$pub/" "$web_env_file"
+    if ! command -v python3 &>/dev/null; then
+      echo "[up] ERRO: python3 em falta para --public-ip (sudo dnf install -y python3)." >&2
+      exit 1
+    fi
+    OT_BOOTSTRAP_PUB="$pub" OT_BOOTSTRAP_CANARY_ENV="$canary_env_file" OT_BOOTSTRAP_WEB_ENV="$web_env_file" python3 <<'PY'
+import os, re
+pub = os.environ["OT_BOOTSTRAP_PUB"]
+for key, path in (("OT_SERVER_IP", os.environ["OT_BOOTSTRAP_CANARY_ENV"]), ("OT_GAMESERVER_IP", os.environ["OT_BOOTSTRAP_WEB_ENV"])):
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        c = f.read()
+    c = re.sub(rf"^{key}=.*", f"{key}={pub}", c, flags=re.MULTILINE)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(c)
+PY
     echo "[up] OT_SERVER_IP e OT_GAMESERVER_IP = $pub (metadata EC2)."
   else
     echo "[up] Aviso: sem IPv4 público na metadata. Define IP/domínio nos .env."
@@ -137,7 +181,7 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
   ./infra/up.sh                 # submódulos + .env + up -d --build
   ./infra/up.sh --env local     # usa infra/*/.env.local + infra/environments/local.compose.env
-  ./infra/up.sh --canary-local  # build do Canary em ../canary + monta canary/config.lua (precisa de infra/canary/secrets/github_token.txt)
+  ./infra/up.sh --canary-local  # build da imagem Canary a partir do submódulo (token NuGet opcional)
   ./infra/up.sh --env local --canary-local
   ./infra/up.sh --public-ip     # idem + OT_SERVER_IP / OT_GAMESERVER_IP = IPv4 EC2
   ./infra/up.sh ps
@@ -185,16 +229,17 @@ if [[ "$BOOTSTRAP_IP" -eq 1 ]]; then
   bootstrap_public_ip "$SELECTED_CANARY_ENV" "$SELECTED_WEBSERVER_ENV"
 fi
 
+ensure_canary_host_config "$SELECTED_CANARY_ENV"
+
 COMPOSE_FILES=(-f infra/docker-compose.yml)
 if [[ "$CANARY_LOCAL" -eq 1 ]]; then
   COMPOSE_FILES+=(-f infra/docker-compose.canary-local.yml)
-  ensure_canary_local_config "$SELECTED_CANARY_ENV"
   _token="${GITHUB_TOKEN_FILE:-$INFRA_DIR/canary/secrets/github_token.txt}"
   if [[ ! -f "$_token" ]]; then
-    echo "[up] ERRO: --canary-local precisa de token GitHub para o build vcpkg." >&2
-    echo "[up] Cria o ficheiro: echo SEU_TOKEN > infra/canary/secrets/github_token.txt" >&2
-    echo "[up] ou define GITHUB_TOKEN_FILE com caminho absoluto." >&2
-    exit 1
+    mkdir -p "$(dirname "$_token")"
+    : >"$_token"
+    echo "[up] Aviso: sem ficheiro de token GitHub; vcpkg compila dependências sem cache NuGet (mais lento)." >&2
+    echo "[up] Opcional: echo SEU_TOKEN > infra/canary/secrets/github_token.txt para acelerar o build." >&2
   fi
 fi
 

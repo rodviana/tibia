@@ -1,4 +1,4 @@
-# Stack completa na mesma EC2 (um único Docker Compose).
+# Stack completa na mesma EC2 (um único Docker Compose). Amazon Linux com SELinux: mounts usam :z no host.
 # Comunicação na rede Docker:
 #   - api (login-api) e server (Canary) ligam ao MySQL em database:3306.
 #   - site faz proxy /api -> api:8080.
@@ -38,9 +38,9 @@ services:
       - ${MYSQL_ENV_FILE:-mysql/.env}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro,z
       # Tabelas Znote (signup/login-api, site): só corre em volume vazio na 1.ª subida.
-      - ./mysql/init/02-znote.sql:/docker-entrypoint-initdb.d/02-znote.sql:ro
+      - ./mysql/init/02-znote.sql:/docker-entrypoint-initdb.d/02-znote.sql:ro,z
     ports:
       - "${MYSQL_PUBLISH_ADDRESS:-127.0.0.1}:${MYSQL_PUBLISH_PORT:-3306}:3306"
     networks:
@@ -63,12 +63,14 @@ services:
     volumes:
       # Ficheiro versionado em infra/canary/ (não no submódulo). Se o caminho no host
       # for um diretório, Docker criou-o porque o ficheiro não existia — apaga e volta a subir.
-      - ./canary/start-local.sh:/canary/start-local.sh:ro
-      - ../canary/data:/canary/data
-      - ../canary/data-canary:/canary/data-canary
-      - ../canary/data-otservbr-global:/canary/data-otservbr-global
-      - ../canary/key.pem:/canary/key.pem:ro
-      - ../canary/schema.sql:/canary/schema.sql:ro
+      - ./canary/start-local.sh:/canary/start-local.sh:ro,z
+      # rateExp e resto da config: vem do host (./infra/up.sh cria a partir de config.lua.dist se faltar).
+      - ../canary/config.lua:/canary/config.lua:ro,z
+      - ../canary/data:/canary/data:z
+      - ../canary/data-canary:/canary/data-canary:z
+      - ../canary/data-otservbr-global:/canary/data-otservbr-global:z
+      - ../canary/key.pem:/canary/key.pem:ro,z
+      - ../canary/schema.sql:/canary/schema.sql:ro,z
     ulimits:
       core: -1
       nofile:
