@@ -94,6 +94,19 @@ cd ~/tibia
 sudo ./infra/up.sh --env local
 ```
 
+#### Canary a partir do submodulo (build local + `canary/config.lua` do host)
+
+Precisa de token GitHub para o vcpkg (uma vez): `echo SEU_TOKEN > infra/canary/secrets/github_token.txt`
+
+```bash
+cd ~/tibia
+sudo ./infra/up.sh --canary-local
+# ou ambiente local:
+sudo ./infra/up.sh --env local --canary-local
+```
+
+O script cria `canary/config.lua` a partir de `config.lua.dist` se faltar e alinha mysql/ip/portas/datapack com o `.env` do Canary escolhido (`rateExp` e o resto ficam no teu `config.lua`).
+
 #### Ambiente padrao com Docker Compose
 
 ```bash

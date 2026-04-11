@@ -1,10 +1,8 @@
-# Build local da imagem Canary (vcpkg + token GitHub para pacotes).
+# Build local da imagem Canary (stack completa na raiz do repo).
+# Preferível: ./infra/up.sh --canary-local (usa infra/docker-compose.canary-local.yml + monta canary/config.lua).
 #
-#   echo SEU_GITHUB_TOKEN > secrets/github_token.txt
+# Desde infra/canary/ (rede mysql externa): echo TOKEN > secrets/github_token.txt
 #   docker compose -f docker-compose.yml -f docker-compose.build.yml build
-# Depois do build, aponta CANARY_IMAGE para a imagem gerada (ex.: ot-canary-server) ou:
-#   docker tag ot-canary-server:latest local/canary:built
-#   CANARY_IMAGE=local/canary:built docker compose -f docker-compose.yml up -d
 #
 # Ajuste VCPKG_FEED_* se o fork usar outro owner no GitHub Packages.
 

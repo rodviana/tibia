@@ -50,6 +50,53 @@ ensure_env_variant() {
   fi
 }
 
+# Lê uma linha KEY=value de .env (sem expandir o resto do ficheiro).
+read_ot_env_line() {
+  local key="$1" file="$2"
+  grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^"//;s/"$//'
+}
+
+# Garante canary/config.lua e alinha MySQL/IP/portas/datapack com o .env do Canary escolhido (modo --canary-local).
+ensure_canary_local_config() {
+  local env_file="$1"
+  local cfg="$ROOT/canary/config.lua"
+  if [[ ! -f "$cfg" ]]; then
+    cp "$ROOT/canary/config.lua.dist" "$cfg"
+    echo "[up] Criado canary/config.lua a partir de config.lua.dist."
+  fi
+  if [[ ! -f "$env_file" ]]; then
+    echo "[up] Aviso: $env_file em falta; não sincronizei canary/config.lua com OT_*." >&2
+    return 0
+  fi
+  local h u p db port ip login game status dpack
+  h="$(read_ot_env_line OT_DB_HOST "$env_file")"
+  u="$(read_ot_env_line OT_DB_USER "$env_file")"
+  p="$(read_ot_env_line OT_DB_PASSWORD "$env_file")"
+  db="$(read_ot_env_line OT_DB_DATABASE "$env_file")"
+  port="$(read_ot_env_line OT_DB_PORT "$env_file")"
+  ip="$(read_ot_env_line OT_SERVER_IP "$env_file")"
+  login="$(read_ot_env_line OT_SERVER_LOGIN_PORT "$env_file")"
+  game="$(read_ot_env_line OT_SERVER_GAME_PORT "$env_file")"
+  status="$(read_ot_env_line OT_SERVER_STATUS_PORT "$env_file")"
+  dpack="$(read_ot_env_line OT_SERVER_DATA "$env_file")"
+  export OT_CFG_SYNC_HOST="$h" OT_CFG_SYNC_USER="$u" OT_CFG_SYNC_PASS="$p" OT_CFG_SYNC_DB="$db" \
+    OT_CFG_SYNC_PORT="$port" OT_CFG_SYNC_IP="$ip" OT_CFG_SYNC_LOGIN="$login" OT_CFG_SYNC_GAME="$game" \
+    OT_CFG_SYNC_STATUS="$status" OT_CFG_SYNC_DPACK="$dpack"
+  perl -i -pe '
+    s/^mysqlHost = .*/mysqlHost = "$ENV{OT_CFG_SYNC_HOST}"/ if length $ENV{OT_CFG_SYNC_HOST};
+    s/^mysqlUser = .*/mysqlUser = "$ENV{OT_CFG_SYNC_USER}"/ if length $ENV{OT_CFG_SYNC_USER};
+    s/^mysqlPass = .*/mysqlPass = "$ENV{OT_CFG_SYNC_PASS}"/ if length $ENV{OT_CFG_SYNC_PASS};
+    s/^mysqlDatabase = .*/mysqlDatabase = "$ENV{OT_CFG_SYNC_DB}"/ if length $ENV{OT_CFG_SYNC_DB};
+    s/^mysqlPort = .*/mysqlPort = $ENV{OT_CFG_SYNC_PORT}/ if length $ENV{OT_CFG_SYNC_PORT};
+    s/^ip = .*/ip = "$ENV{OT_CFG_SYNC_IP}"/ if length $ENV{OT_CFG_SYNC_IP};
+    s/^loginProtocolPort = .*/loginProtocolPort = $ENV{OT_CFG_SYNC_LOGIN}/ if length $ENV{OT_CFG_SYNC_LOGIN};
+    s/^gameProtocolPort = .*/gameProtocolPort = $ENV{OT_CFG_SYNC_GAME}/ if length $ENV{OT_CFG_SYNC_GAME};
+    s/^statusProtocolPort = .*/statusProtocolPort = $ENV{OT_CFG_SYNC_STATUS}/ if length $ENV{OT_CFG_SYNC_STATUS};
+    s/^dataPackDirectory = .*/dataPackDirectory = "$ENV{OT_CFG_SYNC_DPACK}"/ if length $ENV{OT_CFG_SYNC_DPACK};
+  ' "$cfg"
+  echo "[up] canary/config.lua alinhado com $env_file (mysql, ip, portas, dataPack)."
+}
+
 bootstrap_public_ip() {
   local canary_env_file="${1:-$INFRA_DIR/canary/.env}"
   local web_env_file="${2:-$INFRA_DIR/otserver-web/.env}"
@@ -71,11 +118,13 @@ bootstrap_public_ip() {
 }
 
 BOOTSTRAP_IP=0
+CANARY_LOCAL=0
 DOCKER_ARGS=()
 ENV_NAME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --public-ip) BOOTSTRAP_IP=1; shift ;;
+    --canary-local) CANARY_LOCAL=1; shift ;;
     --env)
       if [[ $# -lt 2 ]]; then
         echo "[up] Erro: --env requer um nome (ex.: local)." >&2
@@ -88,6 +137,8 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
   ./infra/up.sh                 # submódulos + .env + up -d --build
   ./infra/up.sh --env local     # usa infra/*/.env.local + infra/environments/local.compose.env
+  ./infra/up.sh --canary-local  # build do Canary em ../canary + monta canary/config.lua (precisa de infra/canary/secrets/github_token.txt)
+  ./infra/up.sh --env local --canary-local
   ./infra/up.sh --public-ip     # idem + OT_SERVER_IP / OT_GAMESERVER_IP = IPv4 EC2
   ./infra/up.sh ps
 Atualizar tudo na EC2 (pull + down + up): ./infra/stack-refresh.sh
@@ -134,15 +185,28 @@ if [[ "$BOOTSTRAP_IP" -eq 1 ]]; then
   bootstrap_public_ip "$SELECTED_CANARY_ENV" "$SELECTED_WEBSERVER_ENV"
 fi
 
+COMPOSE_FILES=(-f infra/docker-compose.yml)
+if [[ "$CANARY_LOCAL" -eq 1 ]]; then
+  COMPOSE_FILES+=(-f infra/docker-compose.canary-local.yml)
+  ensure_canary_local_config "$SELECTED_CANARY_ENV"
+  _token="${GITHUB_TOKEN_FILE:-$INFRA_DIR/canary/secrets/github_token.txt}"
+  if [[ ! -f "$_token" ]]; then
+    echo "[up] ERRO: --canary-local precisa de token GitHub para o build vcpkg." >&2
+    echo "[up] Cria o ficheiro: echo SEU_TOKEN > infra/canary/secrets/github_token.txt" >&2
+    echo "[up] ou define GITHUB_TOKEN_FILE com caminho absoluto." >&2
+    exit 1
+  fi
+fi
+
 if [[ ${#DOCKER_ARGS[@]} -eq 0 ]]; then
   DOCKER_ARGS=(up -d --build)
 fi
 
-echo "[up] docker compose ${COMPOSE_FLAGS[*]} -f infra/docker-compose.yml ${DOCKER_ARGS[*]}"
+echo "[up] docker compose ${COMPOSE_FLAGS[*]} ${COMPOSE_FILES[*]} ${DOCKER_ARGS[*]}"
 if docker compose version &>/dev/null; then
-  docker compose "${COMPOSE_FLAGS[@]}" -f infra/docker-compose.yml "${DOCKER_ARGS[@]}"
+  docker compose "${COMPOSE_FLAGS[@]}" "${COMPOSE_FILES[@]}" "${DOCKER_ARGS[@]}"
 elif sudo docker compose version &>/dev/null; then
-  sudo docker compose "${COMPOSE_FLAGS[@]}" -f infra/docker-compose.yml "${DOCKER_ARGS[@]}"
+  sudo docker compose "${COMPOSE_FLAGS[@]}" "${COMPOSE_FILES[@]}" "${DOCKER_ARGS[@]}"
 else
   echo "[up] Erro: Docker Compose v2 em falta (newgrp docker ou sudo)." >&2
   exit 1
