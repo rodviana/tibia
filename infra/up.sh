@@ -107,7 +107,6 @@ sync_submodules
 ensure_env mysql
 ensure_env canary
 ensure_env otserver-web
-ensure_canary_core_items_from_image
 
 COMPOSE_FLAGS=()
 SELECTED_CANARY_ENV="$INFRA_DIR/canary/.env"

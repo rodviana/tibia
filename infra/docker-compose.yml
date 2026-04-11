@@ -61,7 +61,9 @@ services:
     env_file:
       - ${CANARY_ENV_FILE:-canary/.env}
     volumes:
-      - ../canary/start-local.sh:/canary/start-local.sh:ro
+      # Ficheiro versionado em infra/canary/ (não no submódulo). Se o caminho no host
+      # for um diretório, Docker criou-o porque o ficheiro não existia — apaga e volta a subir.
+      - ./canary/start-local.sh:/canary/start-local.sh:ro
       - ../canary/data:/canary/data
       - ../canary/data-canary:/canary/data-canary
       - ../canary/data-otservbr-global:/canary/data-otservbr-global
