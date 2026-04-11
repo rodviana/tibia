@@ -129,6 +129,34 @@ PY
   echo "[up] canary/config.lua alinhado com $env_file (mysql, ip, portas, dataPack)."
 }
 
+# Login na 7171 pode funcionar com SG só nessa porta; ao escolher personagem o cliente liga à porta de jogo (API/Canary).
+validate_client_game_env() {
+  local canary_env="$1"
+  local web_env="$2"
+  [[ -f "$canary_env" && -f "$web_env" ]] || return 0
+  local sip gip sport gport lport
+  sip="$(read_ot_env_line OT_SERVER_IP "$canary_env")"
+  gip="$(read_ot_env_line OT_GAMESERVER_IP "$web_env")"
+  sport_raw="$(read_ot_env_line OT_SERVER_GAME_PORT "$canary_env")"
+  gport_raw="$(read_ot_env_line OT_GAMESERVER_PORT "$web_env")"
+  lport="$(read_ot_env_line OT_SERVER_LOGIN_PORT "$canary_env")"
+  [[ -z "$lport" ]] && lport=7171
+  if [[ -n "$sport_raw" && -n "$gport_raw" && "$sport_raw" != "$gport_raw" ]]; then
+    echo "[up] ERRO: OT_SERVER_GAME_PORT ($sport_raw) ≠ OT_GAMESERVER_PORT ($gport_raw)." >&2
+    echo "[up] Ao seleccionar personagem o cliente usa o IP/porta do login API (otserver-web); alinha os dois .env." >&2
+    exit 1
+  fi
+  sport="${sport_raw:-7172}"
+  gport="${gport_raw:-7172}"
+  if [[ -n "$sip" && -n "$gip" && "$sip" != "$gip" ]]; then
+    echo "[up] Aviso: OT_SERVER_IP ($sip) ≠ OT_GAMESERVER_IP ($gip); o mundo anunciado ao cliente pode não bater com o Canary." >&2
+  fi
+  if [[ "$sip" == "127.0.0.1" || "$gip" == "127.0.0.1" ]]; then
+    echo "[up] Aviso: IP 127.0.0.1 no .env não serve para jogadores remotos (login HTTP / entrada no mundo)." >&2
+  fi
+  echo "[up] EC2/security group: TCP $lport (login) e $sport (jogo — necessário após escolher personagem)."
+}
+
 bootstrap_public_ip() {
   local canary_env_file="${1:-$INFRA_DIR/canary/.env}"
   local web_env_file="${2:-$INFRA_DIR/otserver-web/.env}"
@@ -230,6 +258,10 @@ if [[ "$BOOTSTRAP_IP" -eq 1 ]]; then
 fi
 
 ensure_canary_host_config "$SELECTED_CANARY_ENV"
+# Só valida antes de `up` — com `down`/`ps` não deve bloquear por .env inconsistente.
+if [[ ${#DOCKER_ARGS[@]} -eq 0 || "${DOCKER_ARGS[0]:-}" == "up" ]]; then
+  validate_client_game_env "$SELECTED_CANARY_ENV" "$SELECTED_WEBSERVER_ENV"
+fi
 
 COMPOSE_FILES=(-f infra/docker-compose.yml)
 if [[ "$CANARY_LOCAL" -eq 1 ]]; then

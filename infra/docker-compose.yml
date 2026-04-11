@@ -26,8 +26,10 @@
 # depois canary e otserver-web com rede externa ot-mysql-net).
 #
 # Site público: SG da EC2 com TCP 80 (e 443 se terminares TLS na origem).
+# Cliente Tibia: abre TCP da porta de login (7171) e da porta de jogo (7172) — só 7171 faz login; ao escolher
+# personagem o cliente liga à 7172 (OT_GAMESERVER_PORT / gameProtocolPort). Sem 7172 parece "erro ao entrar".
 # Cloudflare proxy: OT_SECURITY_TRUSTFORWARDHEADERS=true em infra/otserver-web/.env; SSL na Cloudflare
-# "Flexible" ou "Full" conforme tiveres certificado na origem. Cliente Tibia (7171/7172) não passa pelo proxy HTTP.
+# "Flexible" ou "Full" conforme tiveres certificado na origem. Portas 7171/7172 não passam pelo proxy HTTP.
 
 name: ot-stack
 
