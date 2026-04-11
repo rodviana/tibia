@@ -22,7 +22,7 @@ compose() {
 	fi
 }
 
-echo "[down] docker compose down (sem -v — volumes mantidos-se)..."
+echo "[down] docker compose down (sem -v — volumes mantidos)..."
 compose down --remove-orphans
 
 echo "[down] Feito. Volumes deste projecto (nome típico ot-stack_*):"
@@ -31,11 +31,17 @@ docker volume ls 2>/dev/null | grep -E 'ot-stack|NAME' || true
 cat <<'EOF'
 
 Próximos passos (refazer clone, manter base no Docker):
-  1) Copia para fora do repo: infra/mysql/.env infra/canary/.env infra/otserver-web/.env
-  2) cd .. && rm -rf <pasta-do-repo>
-  3) git clone --recurse-submodules <url> <pasta> && cd <pasta>
-  4) Cola de volta os .env em infra/mysql/ infra/canary/ infra/otserver-web/
-  5) ./infra/up.sh   ou   ./infra/up.sh --public-ip
+  1) Backup dos .env (ficheiros com nomes diferentes):
+       mkdir -p ~/ot-env-backup
+       cp infra/mysql/.env ~/ot-env-backup/mysql.env
+       cp infra/canary/.env ~/ot-env-backup/canary.env
+       cp infra/otserver-web/.env ~/ot-env-backup/otserver-web.env
+  2) cd .. && rm -rf tibia
+  3) git clone --recurse-submodules https://github.com/rodviana/tibia.git tibia && cd tibia
+  4) cp ~/ot-env-backup/mysql.env infra/mysql/.env
+       cp ~/ot-env-backup/canary.env infra/canary/.env
+       cp ~/ot-env-backup/otserver-web.env infra/otserver-web/.env
+  5) ./infra/up.sh --public-ip
 
 Não uses "docker compose down -v" se quiseres manter a base de dados.
 EOF
