@@ -1,6 +1,8 @@
 [submodule "canary"]
 	path = canary
 	url = https://github.com/rodviana/canary.git
+	branch = main
 [submodule "otserver-web"]
 	path = otserver-web
 	url = https://github.com/rodviana/otserver-web.git
+	branch = master

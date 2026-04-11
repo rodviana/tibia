@@ -90,6 +90,7 @@ while [[ $# -gt 0 ]]; do
   ./infra/up.sh --env local     # usa infra/*/.env.local + infra/environments/local.compose.env
   ./infra/up.sh --public-ip     # idem + OT_SERVER_IP / OT_GAMESERVER_IP = IPv4 EC2
   ./infra/up.sh ps
+Atualizar tudo na EC2 (pull + down + up): ./infra/stack-refresh.sh
 Clone: git clone --recurse-submodules https://github.com/rodviana/tibia.git
 EOF
       exit 0
@@ -106,6 +107,7 @@ sync_submodules
 ensure_env mysql
 ensure_env canary
 ensure_env otserver-web
+ensure_canary_core_items_from_image
 
 COMPOSE_FLAGS=()
 SELECTED_CANARY_ENV="$INFRA_DIR/canary/.env"
