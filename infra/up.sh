@@ -11,9 +11,9 @@
 #   git pull && git submodule update --init --recursive
 #
 # items.xml: em alguns clones fica fora do Git (.gitignore em canary/). O compose monta
-# ../canary/data por cima da imagem; sem items.xml o Canary morre ao arrancar. Se o ficheiro
-# não existir, este script descarrega-o do repositório público (URL por defeito = main).
-#   CANARY_ITEMS_XML_URL=https://raw.githubusercontent.com/opentibiabr/canary/main/data/items/items.xml
+# ../canary/data por cima da imagem; sem items.xml o Canary morre ao arrancar.
+# Por defeito tenta raw no fork rodviana/canary (branch rodrigo); se 404, usa upstream main.
+#   CANARY_ITEMS_XML_URL=...  — se definido, usa só este URL (sem fallback).
 #
 set -euo pipefail
 
@@ -142,18 +142,37 @@ ensure_canary_items_xml() {
     return 0
   fi
   mkdir -p "$ROOT/canary/data/items"
-  local url="${CANARY_ITEMS_XML_URL:-https://raw.githubusercontent.com/opentibiabr/canary/main/data/items/items.xml}"
   if ! command -v curl &>/dev/null; then
     echo "[up] ERRO: falta $target e o curl não está instalado. Copia items.xml para esse caminho ou instala curl." >&2
     exit 1
   fi
+  local fork_url="https://raw.githubusercontent.com/rodviana/canary/rodrigo/data/items/items.xml"
+  local upstream_url="https://raw.githubusercontent.com/opentibiabr/canary/main/data/items/items.xml"
   echo "[up] Falta canary/data/items/items.xml (normal em clone sem ficheiros ignorados pelo Git). A descarregar..."
-  if ! curl -fL --connect-timeout 30 --retry 3 --retry-delay 2 -o "$target.part" "$url"; then
+  if [[ -n "${CANARY_ITEMS_XML_URL:-}" ]]; then
+    if ! curl -fL --connect-timeout 30 --retry 3 --retry-delay 2 -o "$target.part" "$CANARY_ITEMS_XML_URL"; then
+      rm -f "$target.part"
+      echo "[up] ERRO: download de items.xml falhou (CANARY_ITEMS_XML_URL)." >&2
+      exit 1
+    fi
+    mv "$target.part" "$target"
+    echo "[up] Instalado: $target (origem: CANARY_ITEMS_XML_URL)"
+    return 0
+  fi
+  if curl -fL --connect-timeout 30 --retry 2 --retry-delay 2 -o "$target.part" "$fork_url"; then
+    mv "$target.part" "$target"
+    echo "[up] Instalado: $target (fork rodviana/canary rodrigo)"
+    return 0
+  fi
+  rm -f "$target.part"
+  echo "[up] items.xml não está no fork no GitHub; a tentar upstream opentibiabr/canary main..."
+  if ! curl -fL --connect-timeout 30 --retry 3 --retry-delay 2 -o "$target.part" "$upstream_url"; then
     rm -f "$target.part"
+    echo "[up] ERRO: não foi possível obter items.xml (fork nem upstream). Publica data/items/items.xml no fork ou define CANARY_ITEMS_XML_URL." >&2
     exit 1
   fi
   mv "$target.part" "$target"
-  echo "[up] Instalado: $target"
+  echo "[up] Instalado: $target (upstream main)"
 }
 
 # Login na 7171 pode funcionar com SG só nessa porta; ao escolher personagem o cliente liga à porta de jogo (API/Canary).
