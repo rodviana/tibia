@@ -58,7 +58,8 @@ services:
       start_period: 300s
 
   server:
-    image: ${CANARY_IMAGE:-ghcr.io/opentibiabr/canary:latest}
+    # Default = imagem do fork (branch rodrigo); ver canary/.github/workflows/docker-publish-branch.yml
+    image: ${CANARY_IMAGE:-ghcr.io/rodviana/canary:rodrigo}
     entrypoint: ["/bin/bash", "/canary/start-local.sh"]
     restart: unless-stopped
     env_file:
