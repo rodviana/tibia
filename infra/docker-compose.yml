@@ -11,14 +11,15 @@
 #   # ou, já clonado: git submodule update --init --recursive
 #
 # .env: infra/mysql/.env, infra/canary/.env, infra/otserver-web/.env
+# Ambientes alternativos: usa --env-file infra/environments/<nome>.compose.env
+# e aponta MYSQL_ENV_FILE / CANARY_ENV_FILE / OTSERVER_WEB_ENV_FILE para os ficheiros desejados.
 # Arranque: ./infra/up.sh   (cria .env em falta e sincroniza submódulos)
 #
 # Na raiz do repositório:
 #   docker compose -f infra/docker-compose.yml up -d --build
 #
-# Se mudares portas só nos .env das subpastas e o Compose não as aplicar no mapeamento,
-# passa os mesmos ficheiros à interpolação:
-#   docker compose --env-file infra/mysql/.env --env-file infra/canary/.env --env-file infra/otserver-web/.env -f infra/docker-compose.yml up -d
+# Para subir um ambiente alternativo (ex.: local):
+#   docker compose --env-file infra/environments/local.compose.env -f infra/docker-compose.yml up -d --build
 #
 # Em alternativa, podes continuar a usar os três compose separados (mysql primeiro;
 # depois canary e otserver-web com rede externa ot-mysql-net).
@@ -34,7 +35,7 @@ services:
     image: mariadb:lts
     restart: unless-stopped
     env_file:
-      - mysql/.env
+      - ${MYSQL_ENV_FILE:-mysql/.env}
     volumes:
       - mysql_data:/var/lib/mysql
       - ../canary/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
@@ -55,11 +56,12 @@ services:
 
   server:
     image: ${CANARY_IMAGE:-ghcr.io/opentibiabr/canary:latest}
+    entrypoint: ["/bin/bash", "/canary/start-local.sh"]
     restart: unless-stopped
     env_file:
-      - canary/.env
+      - ${CANARY_ENV_FILE:-canary/.env}
     volumes:
-      # items.xml e appearances.dat vêm do Git ignore no Canary; ./infra/up.sh copia-os da imagem se faltarem.
+      - ../canary/start-local.sh:/canary/start-local.sh:ro
       - ../canary/data:/canary/data
       - ../canary/data-canary:/canary/data-canary
       - ../canary/data-otservbr-global:/canary/data-otservbr-global
@@ -85,7 +87,7 @@ services:
       dockerfile: infra/otserver-web/Dockerfile.api
     restart: unless-stopped
     env_file:
-      - otserver-web/.env
+      - ${OTSERVER_WEB_ENV_FILE:-otserver-web/.env}
     ports:
       - "${API_PUBLISH_ADDRESS:-127.0.0.1}:${API_PUBLISH_PORT:-8080}:8080"
     networks:

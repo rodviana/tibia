@@ -38,43 +38,21 @@ ensure_env() {
   fi
 }
 
-# O mount ../canary/data:/canary/data substitui o /canary/data da imagem. O repositório Canary
-# ignora data/items/items.xml no .gitignore, pelo que clones Git ficam sem esse ficheiro.
-ensure_canary_core_items_from_image() {
-  local items_xml="$ROOT/canary/data/items/items.xml"
-  [[ -f "$items_xml" ]] && return 0
-
-  local docker_cli
-  if docker info &>/dev/null; then
-    docker_cli=docker
-  elif sudo docker info &>/dev/null; then
-    docker_cli="sudo docker"
-  else
-    echo "[up] Aviso: Docker indisponível; não foi possível copiar items da imagem Canary." >&2
-    return 0
+ensure_env_variant() {
+  local relative_path="$1"
+  local example_relative_path="$2"
+  local target="$INFRA_DIR/$relative_path"
+  local example="$INFRA_DIR/$example_relative_path"
+  local label="infra/$relative_path"
+  if [[ ! -f "$target" ]]; then
+    cp "$example" "$target"
+    echo "[up] Criado $label a partir de $example_relative_path."
   fi
-
-  local image
-  image="$(grep -E '^[[:space:]]*CANARY_IMAGE=' "$INFRA_DIR/canary/.env" 2>/dev/null | tail -1 | sed "s/^[^=]*=//;s/^[[:space:]]*//;s/[[:space:]]*$//;s/^[\"']//;s/[\"']$//")"
-  [[ -z "$image" ]] && image="ghcr.io/opentibiabr/canary:latest"
-
-  echo "[up] Falta canary/data/items/items.xml; a copiar data/items/ da imagem ${image}..."
-  mkdir -p "$ROOT/canary/data/items"
-  local cid
-  cid="$($docker_cli create "$image" 2>/dev/null)" || {
-    echo "[up] ERRO: docker create falhou (ex.: imagem em falta — faz pull do serviço server)." >&2
-    exit 1
-  }
-  if ! $docker_cli cp "$cid:/canary/data/items/." "$ROOT/canary/data/items/"; then
-    $docker_cli rm "$cid" &>/dev/null || true
-    echo "[up] ERRO: docker cp de /canary/data/items falhou." >&2
-    exit 1
-  fi
-  $docker_cli rm "$cid" &>/dev/null || true
-  echo "[up] canary/data/items/ preenchido a partir da imagem."
 }
 
 bootstrap_public_ip() {
+  local canary_env_file="${1:-$INFRA_DIR/canary/.env}"
+  local web_env_file="${2:-$INFRA_DIR/otserver-web/.env}"
   local token pub
   token="$(curl -fsS -m 2 -X PUT "http://169.254.169.254/latest/api/token" \
     -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null || true)"
@@ -84,8 +62,8 @@ bootstrap_public_ip() {
       "http://169.254.169.254/latest/meta-data/public-ipv4" 2>/dev/null || true)"
   fi
   if [[ -n "$pub" ]]; then
-    perl -i -pe "s/^OT_SERVER_IP=.*/OT_SERVER_IP=$pub/" "$INFRA_DIR/canary/.env"
-    perl -i -pe "s/^OT_GAMESERVER_IP=.*/OT_GAMESERVER_IP=$pub/" "$INFRA_DIR/otserver-web/.env"
+    perl -i -pe "s/^OT_SERVER_IP=.*/OT_SERVER_IP=$pub/" "$canary_env_file"
+    perl -i -pe "s/^OT_GAMESERVER_IP=.*/OT_GAMESERVER_IP=$pub/" "$web_env_file"
     echo "[up] OT_SERVER_IP e OT_GAMESERVER_IP = $pub (metadata EC2)."
   else
     echo "[up] Aviso: sem IPv4 público na metadata. Define IP/domínio nos .env."
@@ -94,12 +72,22 @@ bootstrap_public_ip() {
 
 BOOTSTRAP_IP=0
 DOCKER_ARGS=()
+ENV_NAME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --public-ip) BOOTSTRAP_IP=1; shift ;;
+    --env)
+      if [[ $# -lt 2 ]]; then
+        echo "[up] Erro: --env requer um nome (ex.: local)." >&2
+        exit 1
+      fi
+      ENV_NAME="$2"
+      shift 2
+      ;;
     -h|--help)
       cat <<'EOF'
   ./infra/up.sh                 # submódulos + .env + up -d --build
+  ./infra/up.sh --env local     # usa infra/*/.env.local + infra/environments/local.compose.env
   ./infra/up.sh --public-ip     # idem + OT_SERVER_IP / OT_GAMESERVER_IP = IPv4 EC2
   ./infra/up.sh ps
 Atualizar tudo na EC2 (pull + down + up): ./infra/stack-refresh.sh
@@ -121,19 +109,41 @@ ensure_env canary
 ensure_env otserver-web
 ensure_canary_core_items_from_image
 
+COMPOSE_FLAGS=()
+SELECTED_CANARY_ENV="$INFRA_DIR/canary/.env"
+SELECTED_WEBSERVER_ENV="$INFRA_DIR/otserver-web/.env"
+
+if [[ -n "$ENV_NAME" ]]; then
+  case "$ENV_NAME" in
+    local)
+      ensure_env_variant "mysql/.env.local" "mysql/.env.local.example"
+      ensure_env_variant "canary/.env.local" "canary/.env.local.example"
+      ensure_env_variant "otserver-web/.env.local" "otserver-web/.env.local.example"
+      ensure_env_variant "environments/local.compose.env" "environments/local.compose.env.example"
+      COMPOSE_FLAGS=(--env-file "infra/environments/local.compose.env")
+      SELECTED_CANARY_ENV="$INFRA_DIR/canary/.env.local"
+      SELECTED_WEBSERVER_ENV="$INFRA_DIR/otserver-web/.env.local"
+      ;;
+    *)
+      echo "[up] Erro: ambiente '$ENV_NAME' não suportado. Usa sem --env ou --env local." >&2
+      exit 1
+      ;;
+  esac
+fi
+
 if [[ "$BOOTSTRAP_IP" -eq 1 ]]; then
-  bootstrap_public_ip
+  bootstrap_public_ip "$SELECTED_CANARY_ENV" "$SELECTED_WEBSERVER_ENV"
 fi
 
 if [[ ${#DOCKER_ARGS[@]} -eq 0 ]]; then
   DOCKER_ARGS=(up -d --build)
 fi
 
-echo "[up] docker compose -f infra/docker-compose.yml ${DOCKER_ARGS[*]}"
+echo "[up] docker compose ${COMPOSE_FLAGS[*]} -f infra/docker-compose.yml ${DOCKER_ARGS[*]}"
 if docker compose version &>/dev/null; then
-  docker compose -f infra/docker-compose.yml "${DOCKER_ARGS[@]}"
+  docker compose "${COMPOSE_FLAGS[@]}" -f infra/docker-compose.yml "${DOCKER_ARGS[@]}"
 elif sudo docker compose version &>/dev/null; then
-  sudo docker compose -f infra/docker-compose.yml "${DOCKER_ARGS[@]}"
+  sudo docker compose "${COMPOSE_FLAGS[@]}" -f infra/docker-compose.yml "${DOCKER_ARGS[@]}"
 else
   echo "[up] Erro: Docker Compose v2 em falta (newgrp docker ou sudo)." >&2
   exit 1
