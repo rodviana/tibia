@@ -9,6 +9,7 @@
 # Pré-requisito: submódulos Git (canary + otserver-web) — senão o build da API falha.
 #   git clone --recurse-submodules https://github.com/rodviana/tibia.git
 #   # ou, já clonado: git submodule update --init --recursive
+# Canary: branch padrão do submódulo = rodrigo (.gitmodules). stack-refresh com --remote segue essa branch.
 #
 # .env: infra/mysql/.env, infra/canary/.env, infra/otserver-web/.env
 # Ambientes alternativos: usa --env-file infra/environments/<nome>.compose.env

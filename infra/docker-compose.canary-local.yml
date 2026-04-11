@@ -1,4 +1,4 @@
-# Canary: build a partir do código em ../canary (submódulo Git opentibiabr/canary no repo pai).
+# Canary: build a partir do código em ../canary (submódulo rodviana/canary, branch padrão rodrigo — .gitmodules).
 #
 # Uso (raiz do repo):
 #   ./infra/up.sh --canary-local
@@ -17,6 +17,7 @@ services:
       secrets:
         - github_token
       args:
+        CANARY_GIT_BRANCH: ${CANARY_GIT_BRANCH:-rodrigo}
         VCPKG_FEED_URL: ${VCPKG_FEED_URL:-https://nuget.pkg.github.com/opentibiabr/index.json}
         VCPKG_FEED_USERNAME: ${VCPKG_FEED_USERNAME:-opentibiabr}
         VCPKG_BINARY_SOURCES: ${VCPKG_BINARY_SOURCES:-clear;nuget,https://nuget.pkg.github.com/opentibiabr/index.json,read;nugettimeout,1200}

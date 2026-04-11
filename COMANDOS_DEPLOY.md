@@ -37,7 +37,7 @@ git push origin master
 
 ```bash
 cd /c/git/tibia
-git -C canary push origin main
+git -C canary push origin rodrigo
 git -C otserver-web push origin master
 git push origin master
 ```

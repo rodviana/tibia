@@ -42,7 +42,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     -h|--help)
       cat <<'EOF'
-  ./infra/stack-refresh.sh              # git pull + submódulos (último main/master) + Docker + up
+  ./infra/stack-refresh.sh              # git pull + submódulos (último commit da branch em .gitmodules) + Docker + up
   ./infra/stack-refresh.sh --no-public-ip
   ./infra/stack-refresh.sh --wipe-volumes   # down -v (apaga dados MySQL no volume Docker)
   ./infra/stack-refresh.sh --skip-git       # sem git; só imagens + down + up

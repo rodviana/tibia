@@ -1,4 +1,4 @@
-# Build local da imagem Canary (contexto = submódulo ../../canary).
+# Build local da imagem Canary (contexto = submódulo ../../canary; branch padrão rodrigo no .gitmodules do repo pai).
 # Preferível: ./infra/up.sh --canary-local (usa infra/docker-compose.canary-local.yml + monta canary/config.lua).
 #
 # Token NuGet opcional: echo TOKEN > secrets/github_token.txt — sem token, vcpkg compila a partir do código (mais lento).
@@ -14,6 +14,7 @@ services:
       secrets:
         - github_token
       args:
+        CANARY_GIT_BRANCH: ${CANARY_GIT_BRANCH:-rodrigo}
         VCPKG_FEED_URL: ${VCPKG_FEED_URL:-https://nuget.pkg.github.com/opentibiabr/index.json}
         VCPKG_FEED_USERNAME: ${VCPKG_FEED_USERNAME:-opentibiabr}
         VCPKG_BINARY_SOURCES: ${VCPKG_BINARY_SOURCES:-clear;nuget,https://nuget.pkg.github.com/opentibiabr/index.json,read;nugettimeout,1200}
