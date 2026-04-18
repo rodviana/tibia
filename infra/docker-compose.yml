@@ -15,6 +15,7 @@
 # Ambientes alternativos: usa --env-file infra/environments/<nome>.compose.env
 # e aponta MYSQL_ENV_FILE / CANARY_ENV_FILE / OTSERVER_WEB_ENV_FILE para os ficheiros desejados.
 # Arranque: ./infra/up.sh   (cria .env em falta e sincroniza submódulos)
+# Config fun-server: ./infra/up.sh --canary-fun  (overlay infra/docker-compose.canary-fun.yml)
 #
 # Na raiz do repositório:
 #   docker compose -f infra/docker-compose.yml up -d --build

@@ -1,0 +1,8 @@
+# Sobrepõe o mount de config: usa canary/config.lua.fun-server como /canary/config.lua.
+# Uso (raiz do repo): ./infra/up.sh --canary-fun   ou   ./infra/stack-refresh.sh --canary-fun
+# Compatível com --canary-local (build local + config fun).
+
+services:
+  server:
+    volumes:
+      - ../canary/config.lua.fun-server:/canary/config.lua:z

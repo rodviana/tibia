@@ -64,16 +64,16 @@ read_ot_env_line() {
   grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r' | sed 's/^"//;s/"$//'
 }
 
-# Garante canary/config.lua no host e alinha MySQL/IP/portas/datapack com o .env do Canary (Compose monta este ficheiro no contentor).
+# Garante canary/config.lua (ou config.lua.fun-server) no host e alinha MySQL/IP/portas/datapack com o .env do Canary.
 ensure_canary_host_config() {
   local env_file="$1"
-  local cfg="$ROOT/canary/config.lua"
+  local cfg="${2:-$ROOT/canary/config.lua}"
   if [[ ! -f "$cfg" ]]; then
     cp "$ROOT/canary/config.lua.dist" "$cfg"
-    echo "[up] Criado canary/config.lua a partir de config.lua.dist."
+    echo "[up] Criado $cfg a partir de config.lua.dist."
   fi
   if [[ ! -f "$env_file" ]]; then
-    echo "[up] Aviso: $env_file em falta; não sincronizei canary/config.lua com OT_*." >&2
+    echo "[up] Aviso: $env_file em falta; não sincronizei $(basename "$cfg") com OT_*." >&2
     return 0
   fi
   local h u p db port ip login game status dpack
@@ -131,7 +131,7 @@ if dpack:
 with open(path, "w", encoding="utf-8") as f:
     f.write(s)
 PY
-  echo "[up] canary/config.lua alinhado com $env_file (mysql, ip, portas, dataPack)."
+  echo "[up] $(basename "$cfg") alinhado com $env_file (mysql, ip, portas, dataPack)."
 }
 
 # O bind mount ../canary/data:/canary/data substitui o data/ da imagem Docker. Sem items.xml
@@ -237,12 +237,14 @@ PY
 
 BOOTSTRAP_IP=0
 CANARY_LOCAL=0
+CANARY_FUN=0
 DOCKER_ARGS=()
 ENV_NAME=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --public-ip) BOOTSTRAP_IP=1; shift ;;
     --canary-local) CANARY_LOCAL=1; shift ;;
+    --canary-fun) CANARY_FUN=1; shift ;;
     --env)
       if [[ $# -lt 2 ]]; then
         echo "[up] Erro: --env requer um nome (ex.: local)." >&2
@@ -256,10 +258,11 @@ while [[ $# -gt 0 ]]; do
   ./infra/up.sh                 # submódulos + .env + up -d --build
   ./infra/up.sh --env local     # usa infra/*/.env.local + infra/environments/local.compose.env
   ./infra/up.sh --canary-local  # build da imagem Canary a partir do submódulo (token NuGet opcional)
+  ./infra/up.sh --canary-fun    # monta canary/config.lua.fun-server como /canary/config.lua
   ./infra/up.sh --env local --canary-local
   ./infra/up.sh --public-ip     # idem + OT_SERVER_IP / OT_GAMESERVER_IP = IPv4 EC2
   ./infra/up.sh ps
-Atualizar tudo na EC2 (pull + down + up): ./infra/stack-refresh.sh
+Atualizar tudo na EC2 (pull + down + up): ./infra/stack-refresh.sh [--canary-fun]
 Clone: git clone --recurse-submodules https://github.com/rodviana/tibia.git
 EOF
       exit 0
@@ -304,7 +307,9 @@ if [[ "$BOOTSTRAP_IP" -eq 1 ]]; then
   bootstrap_public_ip "$SELECTED_CANARY_ENV" "$SELECTED_WEBSERVER_ENV"
 fi
 
-ensure_canary_host_config "$SELECTED_CANARY_ENV"
+CANARY_CFG_HOST="$ROOT/canary/config.lua"
+[[ "$CANARY_FUN" -eq 1 ]] && CANARY_CFG_HOST="$ROOT/canary/config.lua.fun-server"
+ensure_canary_host_config "$SELECTED_CANARY_ENV" "$CANARY_CFG_HOST"
 # Só valida antes de `up` — com `down`/`ps` não deve bloquear por .env inconsistente.
 if [[ ${#DOCKER_ARGS[@]} -eq 0 || "${DOCKER_ARGS[0]:-}" == "up" ]]; then
   validate_client_game_env "$SELECTED_CANARY_ENV" "$SELECTED_WEBSERVER_ENV"
@@ -320,6 +325,9 @@ if [[ "$CANARY_LOCAL" -eq 1 ]]; then
     echo "[up] Aviso: sem ficheiro de token GitHub; vcpkg compila dependências sem cache NuGet (mais lento)." >&2
     echo "[up] Opcional: echo SEU_TOKEN > infra/canary/secrets/github_token.txt para acelerar o build." >&2
   fi
+fi
+if [[ "$CANARY_FUN" -eq 1 ]]; then
+  COMPOSE_FILES+=(-f infra/docker-compose.canary-fun.yml)
 fi
 
 if [[ ${#DOCKER_ARGS[@]} -eq 0 ]]; then

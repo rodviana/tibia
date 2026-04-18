@@ -5,6 +5,7 @@
 #   ./infra/stack-refresh.sh --no-public-ip
 #   ./infra/stack-refresh.sh --wipe-volumes   # APAGA volume MySQL (personagens / DB)
 #   ./infra/stack-refresh.sh --skip-git       # só Docker (sem pull)
+#   ./infra/stack-refresh.sh --canary-fun     # sobe com canary/config.lua.fun-server
 #
 set -euo pipefail
 
@@ -27,6 +28,7 @@ PUBLIC_IP=1
 WIPE_VOLUMES=0
 SKIP_GIT=0
 PINNED_SUBMODULES=0
+CANARY_FUN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -40,13 +42,15 @@ while [[ $# -gt 0 ]]; do
       PINNED_SUBMODULES=1
       shift
       ;;
+    --canary-fun) CANARY_FUN=1; shift ;;
     -h|--help)
       cat <<'EOF'
-  ./infra/stack-refresh.sh              # git pull + submódulos (último commit da branch em .gitmodules) + Docker + up
+  ./infra/stack-refresh.sh              # git pull + submódulos + Docker + up
   ./infra/stack-refresh.sh --no-public-ip
   ./infra/stack-refresh.sh --wipe-volumes   # down -v (apaga dados MySQL no volume Docker)
   ./infra/stack-refresh.sh --skip-git       # sem git; só imagens + down + up
   ./infra/stack-refresh.sh --pinned-submodules   # submódulos só no commit que o repo pai fixa (sem --remote)
+  ./infra/stack-refresh.sh --canary-fun     # config: canary/config.lua.fun-server
 EOF
       exit 0
       ;;
@@ -88,7 +92,8 @@ else
 fi
 
 UP_ARGS=()
-[[ "$PUBLIC_IP" -eq 1 ]] && UP_ARGS=(--public-ip)
+[[ "$PUBLIC_IP" -eq 1 ]] && UP_ARGS+=(--public-ip)
+[[ "$CANARY_FUN" -eq 1 ]] && UP_ARGS+=(--canary-fun)
 
 echo "[refresh] ./infra/up.sh ${UP_ARGS[*]:-}"
 exec "$INFRA_DIR/up.sh" "${UP_ARGS[@]}"
