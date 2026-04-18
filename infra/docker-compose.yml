@@ -68,8 +68,10 @@ services:
       # Ficheiro versionado em infra/canary/ (não no submódulo). Se o caminho no host
       # for um diretório, Docker criou-o porque o ficheiro não existia — apaga e volta a subir.
       - ./canary/start-local.sh:/canary/start-local.sh:ro,z
-      # rateExp e resto da config: vem do host (./infra/up.sh cria a partir de config.lua.dist se faltar).
-      - ../canary/config.lua:/canary/config.lua:ro,z
+      # Bootstrap do mapa + sed config: usa o script do repo (não depende de rebuild da imagem GHCR).
+      - ../canary/docker/data/start.sh:/canary/start.sh:ro,z
+      # Gravável: start.sh (imagem) aplica sed/cp a partir do env; :ro fazia falhar com "Device or resource busy".
+      - ../canary/config.lua:/canary/config.lua:z
       - ../canary/data:/canary/data:z
       - ../canary/data-canary:/canary/data-canary:z
       - ../canary/data-otservbr-global:/canary/data-otservbr-global:z
